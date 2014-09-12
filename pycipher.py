@@ -1,9 +1,38 @@
 __author__ = 'keith'
 
+import numpy as np
+
 modulo = 0x11b
 high_order_bit = 0x100
 min_x_time_bit = 0x01
 default_x_time_bit = 0x02
+
+
+def mix_columns(state):
+    # for each column, compute the new values for each cell by multiplying (ff_multiply) by the matrix:
+    # [[ 0x02  0x03  0x01  0x01 ]
+    #  [ 0x01  0x02  0x03  0x01 ]
+    #  [ 0x01  0x01  0x02  0x03 ]
+    #  [ 0x03  0x01  0x01  0x02 ]]
+
+    for c in range(4):
+        # get the column from the state
+        col = state[c]
+
+        # create a new column (initialized to all 0s)
+        mixed_column = np.zeros(4, np.int64)
+
+        # compute the new values doing the matrix multiply
+        mixed_column[0] = ff_add(ff_multiply(col[0], 0x02), ff_multiply(col[1], 0x03), col[2], col[3])
+        mixed_column[1] = ff_add(col[0], ff_multiply(col[1], 0x02), ff_multiply(col[2], 0x03), col[3])
+        mixed_column[2] = ff_add(col[0], col[1], ff_multiply(col[2], 0x02), ff_multiply(col[3], 0x03))
+        mixed_column[3] = ff_add(ff_multiply(col[0], 0x03), col[1], col[2], ff_multiply(col[3], 0x02))
+
+        # set the new column in the state
+        state[c] = mixed_column
+
+    # return the modified state
+    return state
 
 
 def ff_multiply(operand, times):
@@ -21,7 +50,7 @@ def ff_multiply(operand, times):
     product = 0
 
     # start at the lowest order bit
-    current_bit = 0x01
+    current_bit = min_x_time_bit
 
     # loop until we've hit all the bits of 'times'
     while current_bit <= times:
@@ -52,32 +81,16 @@ def normalize(num):
     return num
 
 
-def ff_add(num1, num2):
-    # XOR the 2 numbers
-    return num1 ^ num2
+def ff_add(*args):
+    sum = 0
 
-# this should be 0x57 - good
-# print '0x57 . 0x01 = ' + hex(ff_multiply(0x57, 0x01))
-# print
+    for a in args:
+        sum ^= a
 
-# this should be 0xae - good
-# print '0x57 . 0x02 = ' + hex(ff_multiply(0x57, 0x02))
-# print
+    return sum
 
-# this should be 0x47 - good
-# print '0x57 . 0x04 = ' + hex(ff_multiply(0x57, 0x04))
-# print
 
-# this should be 0x8e - good
-# print '0x57 . 0x08 = ' + hex(ff_multiply(0x57, 0x08))
-# print
-
-# this should be 0x07 - good
-# print '0x57 . 0x10 = ' + hex(ff_multiply(0x57, 0x10))
-# print
-
-# this should be 0x07 - good
-# print '0x57 . 0x13 = ' + hex(ff_multiply(0x57, 0x13))
-# print
-
-# print hex(x_time(x_time(x_time(x_time(0x57)))))
+state = np.arange(16).reshape((4, 4))
+print state
+mix_columns(state)
+print state
