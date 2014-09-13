@@ -7,6 +7,7 @@ HIGH_ORDER_BIT = 0x100
 MIN_X_TIME_BIT = 0x01
 DEFAULT_X_TIME_BIT = 0x02
 
+# these values are obtained directly from the FIPS-97 spec
 S_BOX = np.array([[0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76],
                   [0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0],
                   [0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15],
@@ -54,11 +55,27 @@ def mix_columns(state):
     return state
 
 
-def sub_bytes(byte):
+def sub_bytes(state):
+    # replace each byte in the array with it's corresponding value in the S_BOX
+    for byte in np.nditer(state, op_flags=['readwrite']):
+        byte[...] = sub_byte(byte)
+
+    return state
+
+
+def sub_byte(byte):
+    # get the low-order value
     low = byte & 0x0f
+
+    # get the high-order value
     high = (byte >> 4) & 0x0f
 
+    # get the replacement value from the S_BOX
     return S_BOX[high, low]
+
+
+def shift_rows(state):
+    pass
 
 
 def ff_multiply(operand, times):
@@ -120,4 +137,8 @@ def ff_add(*args):
     return sum
 
 
-print hex(sub_bytes(0xa8))
+a = np.arange(16).reshape(4, 4)
+print a
+sub_bytes(a)
+for b in np.nditer(a):
+    print hex(b)
