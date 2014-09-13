@@ -102,6 +102,14 @@ def sub_byte(byte):
     return S_BOX[high, low]
 
 
+def sub_word(word):
+    return sub_bytes(word)
+
+
+def rot_word(word):
+    return np.roll(word, 3)
+
+
 def shift_rows(state):
     # transpose (rotate) the state
     shifted = state.T
@@ -197,3 +205,5 @@ def rcon(i):
     return result
 
 
+for i in range(25):
+    print rot_word(rcon(i))
