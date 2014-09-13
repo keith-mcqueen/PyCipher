@@ -75,7 +75,14 @@ def sub_byte(byte):
 
 
 def shift_rows(state):
-    pass
+    # transpose (rotate) the state
+    shifted = state.T
+
+    # for each row (was a column) roll it by 4 - row index
+    for i in range(4):
+        shifted[i] = np.roll(shifted[i], 4 - i)
+
+    return state
 
 
 def ff_multiply(operand, times):
@@ -139,6 +146,6 @@ def ff_add(*args):
 
 a = np.arange(16).reshape(4, 4)
 print a
-sub_bytes(a)
-for b in np.nditer(a):
-    print hex(b)
+b = shift_rows(a)
+print b
+print a
