@@ -85,6 +85,11 @@ def shift_rows(state):
     return state
 
 
+def add_round_key(state, round_key):
+    # just XOR the corresponding elements of the state and the round key
+    return np.bitwise_xor(state, round_key)
+
+
 def ff_multiply(operand, times):
     # if input or times <= 0, then return 0
     if operand <= 0 or times <= 0:
