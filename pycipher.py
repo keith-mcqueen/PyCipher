@@ -3,6 +3,8 @@ __author__ = 'keith'
 import numpy as np
 
 N_B = 4
+N_R = {4: 10, 6: 12, 8: 14}
+
 MODULO = 0x11b
 HIGH_ORDER_BIT = 0x100
 MIN_X_TIME_BIT = 0x01
@@ -46,6 +48,38 @@ INV_S_BOX = np.array([[0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x4
                      np.uint8)
 
 R_CON_CACHE = {}
+
+
+def cipher(block, key_schedule, n_k):
+    n_r = N_R[n_k]
+
+    # copy the block to the state
+    state = block.copy()
+
+    # add the 0th round key
+    state = add_round_key(state, key_schedule[0:N_B])
+
+    # for each of the rounds...
+    for i in range(1, n_r):
+        # substitute the bytes
+        state = sub_bytes(state)
+
+        # shift the rows
+        state = shift_rows(state)
+
+        # mix the columns
+        state = mix_columns(state)
+
+        # add the round key
+        state = add_round_key(state, key_schedule[i * N_B:(i + 1) * N_B])
+
+    # do a final round of: substitute the bytes, shift the rows and add the last round key
+    state = sub_bytes(state)
+    state = shift_rows(state)
+    state = add_round_key(state, key_schedule[n_r * N_B:(n_r + 1) * N_B])
+
+    # return the encrypted block
+    return state
 
 
 def mix_columns(state):
@@ -197,18 +231,18 @@ def key_expansion(cipher_key):
     n_k = len(cipher_key)
     n_r = n_k + 6
 
-    print '               After     After      Rcon      XOR'
-    print ' i  Previous  RotWord   SubWord    Value    w/ Rcon   w[i-Nk]    Final'
-    print '=== ========  ========  ========  ========  ========  ========  ========'
+    # print '               After     After      Rcon      XOR'
+    # print ' i  Previous  RotWord   SubWord    Value    w/ Rcon   w[i-Nk]    Final'
+    # print '=== ========  ========  ========  ========  ========  ========  ========'
 
     for i in range(n_k, N_B * (n_r + 1)):
         prev = key_schedule[i - 1]
         first = key_schedule[i - n_k]
         temp = prev
-        after_rot_word = None
-        after_sub_word = None
-        rcon_val = None
-        after_xor_rcon = None
+        # after_rot_word = None
+        # after_sub_word = None
+        # rcon_val = None
+        # after_xor_rcon = None
 
         if i % n_k == 0:
             after_rot_word = rot_word(prev)
@@ -224,8 +258,10 @@ def key_expansion(cipher_key):
 
         key_schedule = np.append(key_schedule, final.reshape(1, 4), axis=0)
 
-        print '{:02}: {}  {}  {}  {}  {}  {}  {}'.format(i, w2s(prev), w2s(after_rot_word), w2s(after_sub_word),
-                                                         w2s(rcon_val), w2s(after_xor_rcon), w2s(first), w2s(final))
+        # print '{:02}: {}  {}  {}  {}  {}  {}  {}'.format(i, w2s(prev), w2s(after_rot_word), w2s(after_sub_word),
+        #                                                  w2s(rcon_val), w2s(after_xor_rcon), w2s(first), w2s(final))
+
+    return key_schedule
 
 
 def rcon(i):
@@ -267,6 +303,48 @@ def print_state(state):
         print_word(transform[i])
 
 
-key_text = '2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c'
-key = np.array([int(num, 16) for num in key_text.split()]).reshape(4, 4)
-key_expansion(key)
+def do_128_bit_encrypt():
+    # the plain 'text' is hard-coded from the FIPS-197 spec, Appendix B
+    input_string = '32 43 f6 a8 88 5a 30 8d 31 31 98 a2 e0 37 07 34'
+
+    # convert the input string to an array of numbers
+    input = np.array([int(num, 16) for num in input_string.split()]).reshape(N_B, N_B)
+
+    # the key string is hard-coded from the FIPS-197 spec, Appendix B
+    key_string = '2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c'
+
+    # convert key string to an array of numbers
+    cipher_key = np.array([int(num, 16) for num in key_string.split()]).reshape(4, 4)
+
+    # compute the key schedule
+    key_schedule = key_expansion(cipher_key)
+
+    # perform the encryption
+    output = cipher(input, key_schedule, n_k=4)
+
+    print_state(output)
+
+
+# def do_192_bit_encrypt():
+#     # the plain 'text' is hard-coded from the FIPS-197 spec, Appendix B
+#     input_string = '32 43 f6 a8 88 5a 30 8d 31 31 98 a2 e0 37 07 34'
+#
+#     # convert the input string to an array of numbers
+#     input = np.array([int(num, 16) for num in input_string.split()]).reshape(N_B, N_B)
+#
+#     # the key string is hard-coded from the FIPS-197 spec, Appendix B
+#     key_string = '2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c'
+#
+#     # convert key string to an array of numbers
+#     cipher_key = np.array([int(num, 16) for num in key_string.split()]).reshape(4, 4)
+#
+#     # compute the key schedule
+#     key_schedule = key_expansion(cipher_key)
+#
+#     # perform the encryption
+#     output = cipher(input, key_schedule, n_k = 4)
+#
+#     print_state(output)
+
+
+do_128_bit_encrypt()
