@@ -2,6 +2,7 @@ __author__ = 'keith'
 
 import numpy as np
 
+N_B = 4
 MODULO = 0x11b
 HIGH_ORDER_BIT = 0x100
 MIN_X_TIME_BIT = 0x01
@@ -23,8 +24,8 @@ S_BOX = np.array([[0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0
                   [0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a],
                   [0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e],
                   [0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf],
-                  [0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16]]
-                 , np.uint8)
+                  [0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16]],
+                 np.uint8)
 
 INV_S_BOX = np.array([[0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb],
                       [0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb],
@@ -41,8 +42,8 @@ INV_S_BOX = np.array([[0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x4
                       [0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f],
                       [0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef],
                       [0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61],
-                      [0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d]]
-                     , np.uint8)
+                      [0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d]],
+                     np.uint8)
 
 R_CON_CACHE = {}
 
@@ -75,20 +76,22 @@ def mix_columns(state):
     return state
 
 
-def inv_mix_columns(state):
-    pass
+# def inv_mix_columns(state):
+#     pass
 
 
 def sub_bytes(state):
+    copy = state.copy()
+
     # replace each byte in the array with it's corresponding value in the S_BOX
-    for byte in np.nditer(state, op_flags=['readwrite']):
+    for byte in np.nditer(copy, op_flags=['readwrite']):
         byte[...] = sub_byte(byte)
 
-    return state
+    return copy
 
 
-def inv_sub_bytes(state):
-    pass
+# def inv_sub_bytes(state):
+#     pass
 
 
 def sub_byte(byte):
@@ -121,8 +124,8 @@ def shift_rows(state):
     return state
 
 
-def inv_shift_rows(state):
-    pass
+# def inv_shift_rows(state):
+#     pass
 
 
 def add_round_key(state, round_key):
@@ -168,42 +171,102 @@ def x_time(operand, bit=DEFAULT_X_TIME_BIT):
     return x_time(normalize(operand << 1), bit >> 1)
 
 
-def normalize(num):
+def normalize(val):
     # if the product is too big, then modulo (just XOR) it by 0x11b
-    if num & HIGH_ORDER_BIT == HIGH_ORDER_BIT:
-        return num ^ MODULO
+    if val & HIGH_ORDER_BIT == HIGH_ORDER_BIT:
+        return val ^ MODULO
 
-    return num
+    return val
 
 
 def ff_add(*args):
     # start with 0
-    sum = 0
+    result = 0
 
     # for each argument...
     for a in args:
         # XOR the argument with the sum
-        sum ^= a
+        result ^= a
 
     # return the sum
-    return sum
+    return result
+
+
+def key_expansion(cipher_key):
+    key_schedule = np.copy(cipher_key)
+    n_k = len(cipher_key)
+    n_r = n_k + 6
+
+    print '               After     After      Rcon      XOR'
+    print ' i  Previous  RotWord   SubWord    Value    w/ Rcon   w[i-Nk]    Final'
+    print '=== ========  ========  ========  ========  ========  ========  ========'
+
+    for i in range(n_k, N_B * (n_r + 1)):
+        prev = key_schedule[i - 1]
+        first = key_schedule[i - n_k]
+        temp = prev
+        after_rot_word = None
+        after_sub_word = None
+        rcon_val = None
+        after_xor_rcon = None
+
+        if i % n_k == 0:
+            after_rot_word = rot_word(prev)
+            after_sub_word = sub_word(after_rot_word)
+            rcon_val = rcon(i / n_k)
+            after_xor_rcon = np.bitwise_xor(after_sub_word, rcon_val)
+            temp = after_xor_rcon
+        elif n_k > 6 and i % n_k == 4:
+            after_sub_word = sub_word(prev)
+            temp = after_sub_word
+
+        final = np.bitwise_xor(first, temp)
+
+        key_schedule = np.append(key_schedule, final.reshape(1, 4), axis=0)
+
+        print '{:02}: {}  {}  {}  {}  {}  {}  {}'.format(i, w2s(prev), w2s(after_rot_word), w2s(after_sub_word),
+                                                         w2s(rcon_val), w2s(after_xor_rcon), w2s(first), w2s(final))
 
 
 def rcon(i):
+    # check if this 'i' is in the cache already, if so then just use that
     if i in R_CON_CACHE:
-        print 'using cached value'
         return R_CON_CACHE[i]
 
+    # create a new word of all 0s
     result = np.zeros(4, np.uint16)
 
+    # if i is too low, then just return the all 0s
     if i <= 0:
         return result
 
-    result[0] = x_time(1, 2 ** (i - 1))
+    # compute the 0th nibble of the word
+    result[0] = x_time(1, 1 << (i - 1))
+
+    # save the word in the cache
     R_CON_CACHE[i] = result
 
     return result
 
 
-for i in range(25):
-    print rot_word(rcon(i))
+def w2s(word):
+    if word is None:
+        return '        '
+
+    return '{:02x}{:02x}{:02x}{:02x}'.format(word[0], word[1], word[2], word[3])
+
+
+def print_word(word):
+    print w2s(word)
+
+
+def print_state(state):
+    transform = state.T
+
+    for i in range(len(transform)):
+        print_word(transform[i])
+
+
+key_text = '2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c'
+key = np.array([int(num, 16) for num in key_text.split()]).reshape(4, 4)
+key_expansion(key)
