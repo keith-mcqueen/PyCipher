@@ -54,9 +54,9 @@ R_CON_CACHE = {}
 def mix_columns(state):
     # for each column, compute the new values for each cell by multiplying (ff_multiply) by the matrix:
     # [[ 0x02  0x03  0x01  0x01 ]
-    # [ 0x01  0x02  0x03  0x01 ]
-    # [ 0x01  0x01  0x02  0x03 ]
-    # [ 0x03  0x01  0x01  0x02 ]]
+    #  [ 0x01  0x02  0x03  0x01 ]
+    #  [ 0x01  0x01  0x02  0x03 ]
+    #  [ 0x03  0x01  0x01  0x02 ]]
 
     # for each column in the state (there should only be 4)...
     for c in range(4):
@@ -79,8 +79,36 @@ def mix_columns(state):
     return state
 
 
-# def inv_mix_columns(state):
-#     pass
+def inv_mix_columns(state):
+    # for each column, compute the new values for each cell by multiplying (ff_multiply) by the matrix:
+    # [[ 0x0e  0x0b  0x0d  0x09 ]
+    #  [ 0x09  0x0e  0x0b  0x0d ]
+    #  [ 0x0d  0x09  0x0e  0x0b ]
+    #  [ 0x0b  0x0d  0x09  0x0e ]]
+
+    # for each column in the state (there should only be 4)...
+    for c in range(4):
+        # get the column from the state
+        col = state[c]
+
+        # create a new column (initialized to all 0s)
+        mixed_column = np.zeros(4, np.int64)
+
+        # compute the new values doing the matrix multiply
+        mixed_column[0] = ff_add(ff_multiply(col[0], 0x0e), ff_multiply(col[1], 0x0b), ff_multiply(col[2], 0x0d),
+                                 ff_multiply(col[3], 0x09))
+        mixed_column[1] = ff_add(ff_multiply(col[0], 0x09), ff_multiply(col[1], 0x0e), ff_multiply(col[2], 0x0b),
+                                 ff_multiply(col[3], 0x0d))
+        mixed_column[2] = ff_add(ff_multiply(col[0], 0x0d), ff_multiply(col[1], 0x09), ff_multiply(col[2], 0x0e),
+                                 ff_multiply(col[3], 0x0b))
+        mixed_column[3] = ff_add(ff_multiply(col[0], 0x0b), ff_multiply(col[1], 0x0d), ff_multiply(col[2], 0x09),
+                                 ff_multiply(col[3], 0x0e))
+
+        # set the new column in the state
+        state[c] = mixed_column
+
+    # return the modified state
+    return state
 
 
 def sub_bytes(state):
@@ -88,16 +116,22 @@ def sub_bytes(state):
 
     # replace each byte in the array with it's corresponding value in the S_BOX
     for byte in np.nditer(copy, op_flags=['readwrite']):
-        byte[...] = sub_byte(byte)
+        byte[...] = sub_byte(byte, S_BOX)
 
     return copy
 
 
-# def inv_sub_bytes(state):
-#     pass
+def inv_sub_bytes(state):
+    copy = state.copy()
+
+    # replace each byte in the array with it's corresponding value in the INV_S_BOX
+    for byte in np.nditer(copy, op_flags=['readwrite']):
+        byte[...] = sub_byte(byte, INV_S_BOX)
+
+    return copy
 
 
-def sub_byte(byte):
+def sub_byte(byte, sub_table):
     # get the low-order value
     low = byte & 0x0f
 
@@ -105,7 +139,7 @@ def sub_byte(byte):
     high = (byte >> 4) & 0x0f
 
     # get the replacement value from the S_BOX
-    return S_BOX[high, low]
+    return sub_table[high, low]
 
 
 def sub_word(word):
@@ -127,8 +161,15 @@ def shift_rows(state):
     return state
 
 
-# def inv_shift_rows(state):
-#     pass
+def inv_shift_rows(state):
+    # transpose (rotate) the state
+    shifted = state.T
+
+    # for each row (was a column) roll it by row index
+    for i in range(4):
+        shifted[i] = np.roll(shifted[i], i)
+
+    return state
 
 
 def add_round_key(state, round_key):
@@ -277,9 +318,8 @@ class PyCipher:
         parser.add_argument('-v', '--verbose', help='display verbose output', action='store_true')
 
         # add arguments to set whether encrypting or decrypting
-        parser.add_argument('-e', '--encrypt', help='use pychipher for encryption (default)', action='store_true',
-                            default=True)
-        parser.add_argument('-d', '--decrypt', help='use pychipher for decryption', action='store_true', default=False)
+        parser.add_argument('-e', '--encrypt', help='use pychipher for encryption (default)', action='store_true')
+        parser.add_argument('-d', '--decrypt', help='use pychipher for decryption', action='store_true')
 
         # add arguments to set whether input is text or bytes
         parser.add_argument('-b', '--bytes', help='treat input as bytes (default); use 2-digit hexadecimal (0-9, a-f) '
@@ -495,7 +535,83 @@ class PyCipher:
         return state
 
     def decrypt(self):
-        pass
+        if self.is_verbose:
+            print
+            print 'Decrypting input...'
+            print
+
+        decrypted = self.inv_cipher(self.input_bytes, self.key_schedule)
+
+        print 'plain text: %s' % array_to_hex_string(decrypted)
+
+    def inv_cipher(self, block, key_schedule):
+        # copy the block to the state
+        state = block.copy()
+
+        if self.is_verbose:
+            print 'CIPHER TEXT:\t\t%s' % array_to_hex_string(self.input_bytes)
+            print 'KEY:\t\t\t\t%s' % array_to_hex_string(self.cipher_key)
+            print
+            print 'INVERSE CIPHER (DECRYPT):'
+            print
+            print 'round[00].iinput\t%s' % array_to_hex_string(state)
+            print 'round[00].ik_sch\t%s' % array_to_hex_string(key_schedule[self.n_r * N_B:(self.n_r + 1) * N_B])
+
+        # add the 0th round key
+        state = add_round_key(state, key_schedule[self.n_r * N_B:(self.n_r + 1) * N_B])
+
+        # for each of the rounds (run the rounds backwards)...
+        for i in range(self.n_r - 1, 0, -1):
+            if self.is_verbose:
+                print 'round[{:02}].istart\t{}'.format(self.n_r - i, array_to_hex_string(state))
+
+            # substitute the bytes
+            state = inv_shift_rows(state)
+
+            if self.is_verbose:
+                print 'round[{:02}].is_row\t{}'.format(self.n_r - i, array_to_hex_string(state))
+
+            # shift the rows
+            state = inv_sub_bytes(state)
+
+            if self.is_verbose:
+                print 'round[{:02}].is_box\t{}'.format(self.n_r - i, array_to_hex_string(state))
+
+            # add the round key
+            state = add_round_key(state, key_schedule[i * N_B:(i + 1) * N_B])
+
+            if self.is_verbose:
+                print 'round[{:02}].ik_sch\t{}'.format(self.n_r - i,
+                                                         array_to_hex_string(key_schedule[i * N_B:(i + 1) * N_B]))
+                print 'round[{:02}].ik_add\t{}'.format(self.n_r - i, array_to_hex_string(state))
+
+            # mix the columns
+            state = inv_mix_columns(state)
+
+        # do a final round of: substitute the bytes, shift the rows and add the last round key
+        if self.is_verbose:
+            print 'round[{:02}].istart\t{}'.format(self.n_r, array_to_hex_string(state))
+
+        state = inv_shift_rows(state)
+
+        if self.is_verbose:
+            print 'round[{:02}].is_row\t{}'.format(self.n_r, array_to_hex_string(state))
+
+        state = inv_sub_bytes(state)
+
+        if self.is_verbose:
+            print 'round[{:02}].is_box\t{}'.format(self.n_r, array_to_hex_string(state))
+            print 'round[{:02}].ik_sch\t{}'.\
+                format(self.n_r, array_to_hex_string(key_schedule[self.n_r * N_B:(self.n_r + 1) * N_B]))
+
+        state = add_round_key(state, key_schedule[0:N_B])
+
+        if self.is_verbose:
+            print 'round[{:02}].ioutput\t{}'.format(self.n_r, array_to_hex_string(state))
+            print
+
+        # return the decrypted block
+        return state
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # this is the main script
